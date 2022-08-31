@@ -1,0 +1,28 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title WorldPop (Context 1st)
+
+Person(customer, Customer, "Small Business")
+
+System_Boundary(c1, "WorldPop eCommerce") {
+    Container(old_web_service, "WorldPop Old Web Server", "PHP", "Allows customers to manage their profile")
+    Container(nginx_service, "Web Proxy Service", "NginX", "Allows customers to manage their profile")
+    Container(auth_service, "Auth Service", "Node.js, Spring Boot", "The point of access for customer information")
+    Container(web_frontend_service, "Web Frontend Service", "Node.js & Vue.js", "Transport for business events")
+    Container(web_backend_service, "Web Backend Service", "Node.js & Vue.js", "Transport for business events")
+    ContainerDb(database, "WorldPop Main Database", "MySQL", "Customer, Items, Invoice Database")
+}
+
+Rel(customer, nginx_service, "Uses", "HTTP")
+Rel(customer, web_backend_service, "Uses", "async, JSON/HTTP")
+Rel(customer, auth_service, "Uses", "async, JSON/HTTP")
+
+Rel(nginx_service, old_web_service, "Uses", "HTML/HTTP")
+Rel(nginx_service, web_frontend_service, "Uses", "HTML/HTTP")
+
+Rel(old_web_service, database, "Reads / Writes", "sync, JDBC")
+Rel(web_backend_service, database, "Reads / Writes", "sync, JDBC")
+Rel(auth_service, database, "Reads / Writes", "sync, JDBC")
+
+@enduml

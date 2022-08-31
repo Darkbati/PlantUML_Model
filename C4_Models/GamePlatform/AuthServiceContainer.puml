@@ -1,0 +1,25 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Customer Authentication - Auth API Application
+
+Container(web_frontend_service, "Web Frontend Service", "Vue.js", "E-Commerce Frontend Web Server")
+ContainerDb(db, "Database", "Relational Database Schema", "Stores user registration information, hashed authentication credentials, access logs, etc.")
+
+Container_Boundary(api, "API Application") {
+    Component(users, "Users Controller", "Small Biz")
+    Component(admins, "Admins Controller", "Administrator Account")
+
+    Component(user_service, "User Service", "Small Biz")
+    Component(admin_service, "Admin Service", "Small Biz")
+
+    Rel(users, user_service, "Uses")
+    Rel(admins, admin_service, "Uses")
+    Rel(user_service, db, "Read & write to", "JDBC")
+    Rel(admin_service, db, "Read & write to", "JDBC")
+}
+
+Rel(web_frontend_service, users, "Uses", "JSON/HTTPS")
+Rel(web_frontend_service, admins, "Uses", "JSON/HTTPS")
+
+@enduml
