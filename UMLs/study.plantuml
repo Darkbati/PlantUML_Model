@@ -1,0 +1,78 @@
+@startuml
+actor       Human as hu #blue
+participant "Frontend Server" as front
+participant "Backend Server" as back
+participant "Auth Server" as auth
+database    MariaDB as db
+database    Redis as redis
+
+hu->front: 페이지 호출하기
+front->auth++: 로그인 (ID/PW) 요청
+auth->db ++: 사용자 조회 (Password는 MD5로 전환)
+return 사용자 정보 또는 없음
+auth->redis: Redis 내에 Key 존재 확인 : Method GET
+
+group <font color=red>먼저 로그인한 token을 삭제한다. 중복로그인 지원안함</font>
+    auth->auth: 존재한다면 Redis Key 삭제, 없다면 Pass
+end
+
+auth->auth: AccessToken 생성
+auth->auth: RefreshToken 생성
+auth->redis: AccessToken, RefreshToken 넣기 : Method SET
+return 토큰을 HTTP Payload에 넣어 응답
+
+front->front: 응답 상태 확인 (Result 200 : 로그인 처리, 404 : 회원없음)
+front->front: <font color=blue>로그인 성공</font> : 브라우저 Local Storage에 저장 (브라우저 새로고침해도 삭제되지 않음.)
+
+group Backend Server의 route 폴더 내에 index.js 파일 참고 (URI 정의 되어 있음)
+    hu->front: 회원의 웹 기능 사용 (Action)
+    front->back++: 기능 API URI 호출 (AccessToken HTTP Header 담는다)
+    back->back: AccessToken 만료시간 확인 (HTTP Header에서 추출)
+end
+
+group 토큰 만료없이, 정상적으로 데이터 처리한 경우
+    back->db: 회원 상세 정보 조회
+    db-->back: 회원 상세 정보 결과
+    back-->front: 조회 데이터 응답
+    front->front: 화면에 Render 처리 (데이터 표시)
+
+else <font color=red size=15>만료가 되었거나, 만료 1분전인경우 </font>
+    back-->front --++: 프론트로 AccessToken 만료 또는 만료1분전이면, 갱신요청 (Result : 401)
+    front->front: 401 코드 확인
+    front->auth --++: RefreshToken으로 AccessToken 재발행 요청
+
+    group <font color=red>RefreshToken 만료되거나 조작이 된 경우</font>
+        auth->auth: RefreshToken 만료 여부 검사
+        auth->front: RefreshToken 만료됨.
+        front->front: 토큰 사용기간 만료로, 로그아웃처리
+        front->front: 브라우저 LocalStorage에서 토큰정보 삭제
+    end 
+
+    group RefreshToken 유효한 경우
+        auth->auth: JWT 토큰내에 code(User ID)를 추출한다.
+        auth->redis: Redis내에 Key가 존재하는지 확인(토큰 데이터 가져옴)
+        group <font color=red>Redis에 (USER_회원번호)키가 삭제된경우</font>
+            auth->front: Redis에 키가 없어, 로그아웃처리
+            front->front: 토큰 사용기간 만료로, 로그아웃처리
+            front->front: 브라우저 LocalStorage에서 토큰정보 삭제
+        end
+
+        auth->auth : front로부터온 RefreshToken과 Redis에 저장된 Refresh 토큰 비교
+
+        group <font color=red>Redis에 있고, Front RefreshToken과 다른 경우(중복 로그인)</font>
+            auth->front : (다른 경우), 다른곳에서 로그인했으니, 로그아웃처리함.
+            front->front: 중복로그인로 로그아웃 (설명: Redis에 기록된 것은 마지막 로그인만 저장됨)
+            front->front: 브라우저 LocalStorage에서 토큰정보 삭제
+        end
+
+        group 정상적인 토큰 발행과정
+            auth->auth: AccessToken 신규 발급
+            auth->redis: Redis에 (USER_회원번호) Key 저장(AccessToken, RefreshToken 저장)
+            return 신규 발급된 토큰을 HTTP Payload로 전달
+            front->front: 브라우저 LocalStorage에서 토큰정보 저장(갱신)
+        end
+    end
+end
+
+
+@enduml
